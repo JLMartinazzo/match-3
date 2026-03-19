@@ -1,13 +1,20 @@
-//pega o elemento do "quadro"
 const board = document.getElementById("board");
+const scoreDisplay = document.getElementById("score");
+const canvas = document.getElementById("scoreChart");
+const ctx = canvas.getContext("2d");
 
-//tamanho do quadro e cores dos elementos
 const width = 8;
 const colors = ["red", "blue", "green", "yellow", "purple"];
 
 let tiles = [];
+let score = 0;
+let scoreHistory = [];
 
-//cria o tabuleiro do jogo
+// swipe
+let startX, startY;
+let selectedIndex = null;
+
+// criar tabuleiro
 function createBoard() {
   for (let i = 0; i < width * width; i++) {
     const tile = document.createElement("div");
@@ -16,8 +23,15 @@ function createBoard() {
     const color = colors[Math.floor(Math.random() * colors.length)];
     tile.classList.add(color);
 
-    tile.setAttribute("draggable", true);
-    tile.setAttribute("id", i);
+    tile.setAttribute("data-id", i);
+
+    // TOUCH EVENTS
+    tile.addEventListener("touchstart", touchStart);
+    tile.addEventListener("touchend", touchEnd);
+
+    // fallback desktop
+    tile.addEventListener("mousedown", touchStart);
+    tile.addEventListener("mouseup", touchEnd);
 
     board.appendChild(tile);
     tiles.push(tile);
@@ -26,54 +40,179 @@ function createBoard() {
 
 createBoard();
 
-let colorDragged;
-let colorReplaced;
-let tileIdDragged;
-let tileIdReplaced;
+// 📱 swipe start
+function touchStart(e) {
+  selectedIndex = parseInt(this.dataset.id);
 
-tiles.forEach(tile => {
-  tile.addEventListener("dragstart", dragStart);
-  tile.addEventListener("dragover", e => e.preventDefault());
-  tile.addEventListener("drop", dragDrop);
-  tile.addEventListener("dragend", dragEnd);
-});
-
-function dragStart() {
-  colorDragged = this.classList[1];
-  tileIdDragged = parseInt(this.id);
+  startX = e.touches ? e.touches[0].clientX : e.clientX;
+  startY = e.touches ? e.touches[0].clientY : e.clientY;
 }
 
-function dragDrop() {
-  colorReplaced = this.classList[1];
-  tileIdReplaced = parseInt(this.id);
+// 📱 swipe end
+function touchEnd(e) {
+  let endX = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
+  let endY = e.changedTouches ? e.changedTouches[0].clientY : e.clientY;
 
-  this.classList.replace(colorReplaced, colorDragged);
-  tiles[tileIdDragged].classList.replace(colorDragged, colorReplaced);
-}
+  let dx = endX - startX;
+  let dy = endY - startY;
 
-//verifica se o possui 3 elementos alinhados
-function checkRowMatch() {
-  for (let i = 0; i < 61; i++) {
-    const row = [i, i+1, i+2];
-    const color = tiles[i].classList[1];
+  let targetIndex = null;
 
-    if (row.every(index => tiles[index].classList[1] === color)) {
-      row.forEach(index => tiles[index].classList.remove(color));
+  if (Math.abs(dx) > Math.abs(dy)) {
+    targetIndex = dx > 0 ? selectedIndex + 1 : selectedIndex - 1;
+  } else {
+    targetIndex = dy > 0 ? selectedIndex + width : selectedIndex - width;
+  }
+
+  if (isValidMove(selectedIndex, targetIndex)) {
+    swapTiles(selectedIndex, targetIndex);
+
+    if (!checkAnyMatch()) {
+      setTimeout(() => swapTiles(selectedIndex, targetIndex), 200);
     }
   }
 }
 
-//adiciona "gravidade" às peças
+// validar movimento
+function isValidMove(a, b) {
+  return (
+    b >= 0 &&
+    b < width * width &&
+    (b === a - 1 || b === a + 1 || b === a - width || b === a + width)
+  );
+}
+
+// troca
+function swapTiles(i1, i2) {
+  let t1 = tiles[i1];
+  let t2 = tiles[i2];
+
+  let c1 = t1.classList[1];
+  let c2 = t2.classList[1];
+
+  t1.classList.replace(c1, c2);
+  t2.classList.replace(c2, c1);
+}
+
+// 🔥 MATCH DINÂMICO (3 OU MAIS)
+function findMatches() {
+  let matches = [];
+
+  // horizontal
+  for (let i = 0; i < width * width; i++) {
+    let match = [i];
+    let color = tiles[i].classList[1];
+
+    for (let j = i + 1; j < width * width; j++) {
+      if (tiles[j].classList[1] === color && j % width !== 0) {
+        match.push(j);
+      } else break;
+    }
+
+    if (match.length >= 3) matches.push(match);
+  }
+
+  // vertical
+  for (let i = 0; i < width * width; i++) {
+    let match = [i];
+    let color = tiles[i].classList[1];
+
+    for (let j = i + width; j < width * width; j += width) {
+      if (tiles[j].classList[1] === color) {
+        match.push(j);
+      } else break;
+    }
+
+    if (match.length >= 3) matches.push(match);
+  }
+
+  return matches;
+}
+
+// aplicar matches
+function handleMatches() {
+  let matches = findMatches();
+
+  if (matches.length === 0) return false;
+
+  matches.forEach(match => {
+    match.forEach(i => {
+      let tile = tiles[i];
+      let color = tile.classList[1];
+
+      tile.classList.add("match");
+
+      setTimeout(() => {
+        tile.classList.remove(color);
+        tile.classList.remove("match");
+      }, 200);
+
+      score += match.length * 5;
+    });
+  });
+
+  updateScore();
+  return true;
+}
+
+// ⬇️ queda com animação
 function moveDown() {
-  for (let i = 0; i < 56; i++) {
+  for (let i = width * width - width - 1; i >= 0; i--) {
     if (!tiles[i + width].classList[1]) {
-      tiles[i + width].classList.add(tiles[i].classList[1]);
-      tiles[i].classList.remove(tiles[i].classList[1]);
+      let color = tiles[i].classList[1];
+
+      tiles[i + width].classList.add(color);
+      tiles[i + width].classList.add("falling");
+
+      tiles[i].classList.remove(color);
+
+      setTimeout(() => {
+        tiles[i + width].classList.remove("falling");
+      }, 200);
+    }
+  }
+
+  // spawn
+  for (let i = 0; i < width; i++) {
+    if (!tiles[i].classList[1]) {
+      let color = colors[Math.floor(Math.random() * colors.length)];
+      tiles[i].classList.add(color);
     }
   }
 }
 
-setInterval(() => {
-  checkRowMatch();
+// score
+function updateScore() {
+  scoreDisplay.innerText = "Score: " + score;
+
+  scoreHistory.push(score);
+  drawChart();
+}
+
+// 📊 gráfico simples
+function drawChart() {
+  canvas.width = 300;
+  canvas.height = 100;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  ctx.beginPath();
+
+  scoreHistory.forEach((s, i) => {
+    let x = (i / scoreHistory.length) * canvas.width;
+    let y = canvas.height - s * 0.05;
+
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+
+  ctx.stroke();
+}
+
+// loop
+function gameLoop() {
+  if (handleMatches()) return;
   moveDown();
-}, 200);
+}
+
+setInterval(gameLoop, 200);

@@ -24,6 +24,7 @@ body {
   width: 100%;
   aspect-ratio: 1;
   border-radius: 10px;
+  transition: transform 0.2s, opacity 0.2s;
 }
 
 .red { background: #ff4d4d; }
@@ -31,3 +32,19 @@ body {
 .green { background: #4dff88; }
 .yellow { background: #ffd24d; }
 .purple { background: #b84dff; }
+
+/* animação de queda */
+.falling {
+  transform: translateY(-20px);
+}
+
+/* efeito de match */
+.match {
+  opacity: 0;
+  transform: scale(0.5);
+}
+
+/* seleção */
+.selected {
+  outline: 3px solid white;
+}
