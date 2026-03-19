@@ -98,19 +98,26 @@ function swapTiles(i1, i2) {
 function findMatches() {
   let matches = [];
 
-  // horizontal
-  for (let i = 0; i < width * width; i++) {
-    let match = [i];
-    let color = tiles[i].classList[1];
+  // horizontal correto
+for (let row = 0; row < width; row++) {
+  let match = [];
+  let lastColor = null;
 
-    for (let j = i + 1; j < width * width; j++) {
-      if (tiles[j].classList[1] === color && j % width !== 0) {
-        match.push(j);
-      } else break;
+  for (let col = 0; col < width; col++) {
+    let index = row * width + col;
+    let color = tiles[index].classList[1];
+
+    if (color === lastColor) {
+      match.push(index);
+    } else {
+      if (match.length >= 3) matches.push([...match]);
+      match = [index];
+      lastColor = color;
     }
-
-    if (match.length >= 3) matches.push(match);
   }
+
+  if (match.length >= 3) matches.push(match);
+}
 
   // vertical
   for (let i = 0; i < width * width; i++) {
@@ -135,50 +142,73 @@ function handleMatches() {
 
   if (matches.length === 0) return false;
 
+  let uniqueTiles = new Set();
+
   matches.forEach(match => {
-    match.forEach(i => {
-      let tile = tiles[i];
-      let color = tile.classList[1];
-
-      tile.classList.add("match");
-
-      setTimeout(() => {
-        tile.classList.remove(color);
-        tile.classList.remove("match");
-      }, 200);
-
-      score += match.length * 5;
-    });
+    match.forEach(i => uniqueTiles.add(i));
   });
 
+  // efeito visual
+  uniqueTiles.forEach(i => {
+    let tile = tiles[i];
+    tile.classList.add("match");
+  });
+
+  // remover depois
+  setTimeout(() => {
+    uniqueTiles.forEach(i => {
+      let tile = tiles[i];
+      let color = tile.classList[1];
+      tile.classList.remove(color);
+      tile.classList.remove("match");
+    });
+  }, 150);
+
+  // score apenas uma vez por ciclo
+  score += uniqueTiles.size * 10;
   updateScore();
+
   return true;
 }
 
 // ⬇️ queda com animação
 function moveDown() {
-  for (let i = width * width - width - 1; i >= 0; i--) {
-    if (!tiles[i + width].classList[1]) {
-      let color = tiles[i].classList[1];
+  for (let col = 0; col < width; col++) {
 
-      tiles[i + width].classList.add(color);
-      tiles[i + width].classList.add("falling");
+    let column = [];
 
-      tiles[i].classList.remove(color);
+    // pega todas cores existentes na coluna
+    for (let row = 0; row < width; row++) {
+      let index = row * width + col;
+      let color = tiles[index].classList[1];
 
-      setTimeout(() => {
-        tiles[i + width].classList.remove("falling");
-      }, 200);
+      if (color) column.push(color);
+    }
+
+    // preenche de baixo pra cima
+    for (let row = width - 1; row >= 0; row--) {
+      let index = row * width + col;
+
+      let tile = tiles[index];
+      let oldColor = tile.classList[1];
+
+      tile.className = "tile";
+
+      if (column.length > 0) {
+        let newColor = column.pop();
+        tile.classList.add(newColor);
+        tile.classList.add("falling");
+      } else {
+        let newColor = colors[Math.floor(Math.random() * colors.length)];
+        tile.classList.add(newColor);
+      }
     }
   }
 
-  // spawn
-  for (let i = 0; i < width; i++) {
-    if (!tiles[i].classList[1]) {
-      let color = colors[Math.floor(Math.random() * colors.length)];
-      tiles[i].classList.add(color);
-    }
-  }
+  // remove animação depois
+  setTimeout(() => {
+    tiles.forEach(t => t.classList.remove("falling"));
+  }, 150);
 }
 
 // score
@@ -211,8 +241,15 @@ function drawChart() {
 
 // loop
 function gameLoop() {
-  if (handleMatches()) return;
-  moveDown();
+  let matched = handleMatches();
+
+  if (matched) {
+    setTimeout(() => {
+      moveDown();
+    }, 150);
+  }
 }
+
+setInterval(gameLoop, 250);
 
 setInterval(gameLoop, 200);
